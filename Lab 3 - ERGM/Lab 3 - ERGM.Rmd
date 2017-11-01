@@ -1,0 +1,323 @@
+---
+title: "Lab 3: Exponential Random Graph Modeling"
+subtitle: "An implementation in R Markdown"
+author: "Student Name Here"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+
+---
+
+```{r Installation, include=FALSE, echo = FALSE, eval = FALSE}
+# The R Markdown version of this lab was created by Thomas Rousse, Fall 2017, for Professor Noshir Contractor's SNA graduate seminar. It was developed from existing versions of the lab.
+# These packages are here for installation if you need them. This line of code will not be evaluated when you knit this RMarkdown document into output, but can be run manually.
+install.packages("statnet")
+install.packages("igraph")
+install.packages("coda")
+install.packages("latticeExtra")
+install.packages("knitr")
+install.packages("tufte")
+install.packages("GGally")
+install.packages("ggplot2")
+install.packages("scales")
+# You should set your working directory now, either by going to Session > Set Working Directory.
+# To begin, make sure you have downloaded this file, CRIeq.txt, EXeq_cons.txt, and EXeq.txt into the same directory, preferably their own folder.
+```
+```{r Setup, echo = FALSE, include = FALSE}
+#Load packages
+library(statnet)
+library(tufte)
+library(knitr)
+library(GGally)
+library(ggplot2)
+library(scales)
+# Because igraph causes conflicts with other network activities, we will call the package functions explicity using igraph:: when needed.
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+```
+
+# Introduction
+
+In this lab, we will be testing a number of hypotheses about a network’s structure using exponential random graph modeling (ERGM) techniques using the `statnet` package in R.^[Mark S. Handcock, David R. Hunter, Carter T. Butts, Steven M. Goodreau, and Martina Morris (2003). `statnet`: Software tools for the Statistical Modeling of Network Data. [statnetproject.org](http://statnetproject.org); *see also* `?? statnet`. For more information about ERGMs, *see generally* D. Lusher, J. Koskinen, & G. Robins (2012) *Exponential Random Graph Models for Social Networks*.]  `statnet` provides a comprehensive framework for ERGM-based network modeling, including tools for model estimation, model evaluation, model-based network simulation, and network visualization. This functionality is powered by a central Markov chain Monte Carlo (MCMC) algorithm.^[For a great introduction to MCMC grounded in graph theory, *see* Jeremy Kun, [Markov Chain Monte Carlo Without All the Bullshit.](https://jeremykun.com/2015/04/06/markov-chain-monte-carlo-without-all-the-bullshit/)] 
+
+`statnet` resources: 
+
+●	[Developer website](http://csde.washington.edu/statnet/)
+
+●	[User guide](http://csde.washington.edu/statnet/users_guide.shtml)
+
+●	[Tutorial](http://csde.washington.edu/statnet/Online_Users_Guide/v24i08.pdf)
+
+# Data
+
+We will analyze the communication behaviors within a team of seventeen members who were involved in designing military installations. 
+
+*	`CRIeq.txt`: each team member’s communication to retrieve information from other team members on the topic of environmental quality (eq). This is a directed, binary relation.
+
+*	`CAIeq.txt`: each team member’s communication to allocate information to other team members on the topic of environmental quality (eq). This is a directed, binary relation.
+
+*	`EXeq_cons.txt`: each team member’s expertise on the topic of environmental quality (eq) as perceived on average by all team members. This is a continuous attribute.
+
+# Hypotheses
+
+We will test various hypotheses based on the Theory of Transactive Memory.^[*See* Monge & Contractor (2003) *Theories of Communication Networks*, 198—203.]  
+
+*Hypothesis 1*: Individuals are less likely to retrieve information from those who retrieve information from them.
+
+*Hypothesis 2a*: Information retrieval tends to be transitive. That is, if individual *i* retrieves information from individual *k*, and individual *k* retrieves information from individual *j*, then individual *i* is more likely to retrieve information from individual *j*.
+
+*Hypothesis 2b*: Transitivity increases at a sub-linearly rate as a function of the number of ties.
+
+*Hypothesis 3a*: Individuals tend to retrieve information from other members with high expertise. 
+
+*Hypothesis 3b*: Individuals with low expertise tend to retrieve information from many others.
+
+*Hypothesis 4*: Individuals tend to retrieve information from members to whom they allocate information. 
+
+# Part I. Building & Visualizing the Networks (**30 pts**)
+
+The analysis will use three files: the `CRIeq.txt` as the network file, `EXeq_cons.txt` as the attribute file, and `CAIeq.txt` as the covariate network file. To begin, we must convert the data files into matrices, transform those matrices into networks, and attach the attribute file to our base network.
+
+```{r Check for Required Files, echo = FALSE, include = FALSE}
+list.files() # List the files in the current working directory to see if you're in the right directory
+```
+```{r Create Network Files, echo = FALSE, include=FALSE}
+# Load the network file
+A     <- matrix(scan("CRIeq.txt", n=17*17), 17, 17, byrow = TRUE)    # Make an R matrix from the CRIeq file
+CRIeq <- as.network.matrix(A, matrix.type="adjacency")               # Turn that matrix into a network
+
+# Load the attribute file
+att <- read.table("EXeq_cons.txt", header = T)    # This reads the attribute table and saves in in a variable called 'att'
+att <- as.vector(att)                             # This converts those attributes into an R vector
+set.vertex.attribute(CRIeq, "EX", att, v=1:17)    # This sets those attributes as vertex attributes in the network you created above
+
+# Load the covariate network  
+B     <- matrix(scan("CAIeq.txt", n =17*17), 17, 17, byrow =TRUE)  # Reads in the CAIeq file and saves it as an R matrix
+CAIeq <- as.network.matrix(B, matrix.type="adjacency")             # Converts that matrix into a network
+```
+```{r Save Formatted Data, echo = FALSE, include = FALSE, eval = FALSE}
+# To save objects which can be reloaded later, run this chunk manually.
+save.image("Lab3_files.RData")
+```
+```{r Load Formatted Data, echo = FALSE, include = FALSE, eval = FALSE}
+# To load your previously saved data set, run this chunk manually.
+load("Lab3_files.RData")
+```
+
+# Understanding the Base Network
+
+Let's begin by looking at the summary of our base network.
+
+```{r, include=FALSE}
+(summary(CRIeq))
+```
+
+## Analysis
+
+**In your own words, explain what this network respresents and its relationship to our attribute information and the other network.**
+
+# Visualization
+
+Before we conduct further analyis, let's visualize our base network. Similar to our approach in Lab 2, we will begin by establishing set coordinates for our nodes in order to simplify visual comparisons.
+
+```{r Base Layout, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Base Graph Structure", warning=FALSE, echo=FALSE}
+baseGraph <- ggnet2(CRIeq, mode = 'fruchtermanreingold', edge.color="#fffff8", label = TRUE) + theme(panel.background = element_rect(fill = "#fffff8"))
+baseGraph
+# Now we're going to create a matrix with two vectors, the first the X coordinate of each node in the base graph, and the second the Y coordinate. baseGraph is a ggplot data-type, and it has a vector named "data" which contains various vectors, including X and Y. We also have to set the number of rows to initialize the matrix.
+baseLayout <- matrix(c(baseGraph$data$x, baseGraph$data$y), nrow=length(baseGraph$data$x), ncol = 2)
+```
+
+Next we can visualize our base network.
+
+```{r Base Network, fig.width=10, fig.fullwidth= TRUE, fig.cap = "Base Network: Retrieval of Environmental Quality", echo = FALSE}
+# If you pass ggnet2 the mode value of a matrix, it will use the first two vectors to position the nodes on their x and y axes. Thus, if we call baseLayout throughout the rest of the visualizations, the nodes will remain in place but the edges drawn between the visualizations will change. 
+ggnet2(CRIeq, mode = baseLayout, label = TRUE,  arrow.size = 8, edge.color="red", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8"))
+```
+
+Next, we will size the nodes by the their expertise value.
+
+```{r Network by Attribute Size, fig.width=10, fig.fullwidth= TRUE, fig.cap = "Base Network: Retrieval of Environmental Quality, Nodes Sized by Expertise Score", echo = FALSE}
+# In this visualization, we change the size of the individual nodes by calling the $expertise vector of the att (attribute) object. Because the values are normalized, we multiply them by a number until they get to an appropriate size.
+# Note: you need to knit this visualization to see the nodes accurately sized.
+ggnet2(CRIeq, mode = baseLayout, label = TRUE,  size = (att$expertise)*150, arrow.size = 8, edge.color="green", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) + guides(color = FALSE, size = FALSE) # the final part of this argument removes the default legend from ggplot2 objects.
+```
+
+Let's compare this visualization to sizing by in-degree centrality.
+
+```{r Nodes by Indegree Centrality, fig.width=10, fig.fullwidth= TRUE, fig.cap = "Base Network: Nodes by Indegree Centrality", echo = FALSE}
+# In this visualization, we change the size of the individual nodes by calling the $expertise vector of the att (attribute) object. Because the values are normalized, we multiply them by a number until they get to an appropriate size.
+# Note: you need to knit this visualization to see the nodes accurately sized.
+ggnet2(CRIeq, mode = baseLayout, label = TRUE,  size = igraph::degree(igraph::graph.adjacency(A), mode="in"), arrow.size = 8, edge.color="purple", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) + guides(color = FALSE, size = FALSE) # the final part of this argument removes the default legend from ggplot2 objects.
+```
+
+## Analysis
+
+**Consider hypothesis 3a from Part I. Do these visualizations prove or disprove the hypothesis? In your own words, interpret the graphs and explain how they support or reject the hypothesis.**
+
+# Understanding the Covariate Network
+
+Let's explore the summary statistics of our covariate network.
+
+```{r Summary of Covariate Network, echo=FALSE}
+(summary(CAIeq))
+```
+
+## Analysis
+
+**In your own words, explain what this network respresents and its relationship to the other network and the attribute information.**
+
+# Visualization
+
+We will repeat the visualization process for our covariate network. Observe the location and distribution of edges in the following visualization.
+
+```{r Covariate Network, fig.width=10, fig.fullwidth= TRUE, fig.cap = "Covariate Network: Allocation of Environmental Quality", echo = FALSE}
+# Note that we've changed our network object to be visualized.
+ggnet2(CAIeq, mode = baseLayout, label = TRUE,  arrow.size = 8, edge.color="red", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8"))
+```
+
+Next, we will size the nodes by their expertise scores.
+
+```{r Covariate Network by Attribute Size, fig.width=10, fig.fullwidth= TRUE, fig.cap = "Base Network: Retrieval of Environmental Quality, Nodes Sized by Expertise Score", echo = FALSE}
+# In this visualization, we change the size of the individual nodes by calling the $expertise vector of the att (attribute) object. Because the values are normalized, we multiply them by a number until they get to an appropriate size.
+# Note: you need to knit this visualization to see the nodes accurately sized.
+ggnet2(CAIeq, mode = baseLayout, label = TRUE,  size = (att$expertise)*150, arrow.size = 8, edge.color="green", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) + guides(color = FALSE, size = FALSE) # the final part of this argument removes the default legend from ggplot2 objects.
+```
+
+```{r Nodes by Out-degree Centrality, fig.width=10, fig.fullwidth= TRUE, fig.cap = "Base Network: Nodes by Out-degree Centrality", echo = FALSE}
+# In this visualization, we change the size of the individual nodes by calling the $expertise vector of the att (attribute) object. Because the values are normalized, we multiply them by a number until they get to an appropriate size.
+# Note: you need to knit this visualization to see the nodes accurately sized.
+ggnet2(CAIeq, mode = baseLayout, label = TRUE,  size = igraph::degree(igraph::graph.adjacency(B), mode="out"), arrow.size = 8, edge.color="purple", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) + guides(color = FALSE, size = FALSE) # the final part of this argument removes the default legend from ggplot2 objects.
+```
+
+## Analysis
+
+**Consider hypothesis 3b from Part I. Do these visualizations prove or disprove the hypothesis? In your own words, interpret the graphs and explain how they support or reject the hypothesis.**
+
+# Part II: Constructing & Analyzing the ERGM Model (**70 pts**)
+
+Next, we're going to construct an ERGM model. 
+
+# Base Network ERGM
+
+```{r Learn about ERGM, include=FALSE, eval=FALSE}
+# Take a moment to familiarize yourself with the ergm function of statnet.
+?? ergm
+# Review the terms used below.
+?? ergm-`ergm-terms`
+```
+```{r Building the ERGM Model for the Base Network}
+model1 <- ergm(CRIeq ~ edges 
+               + mutual           # H1
+               + transitive       # H2a: Transitive triads ( type 120D, 030T, 120U, or 300)
+               + nodeicov("EX")   # H3a
+               + nodeocov("EX")   # H3b
+               + edgecov(CAIeq)   # H4
+) 
+summary(model1)
+```
+
+## Analysis
+
+**Take a look at the ERGM equation discussed in the week 5 slides. What term in the equation do the ERGM terms correspond to?**
+
+**Explain each ERGM term and its relationship to your hypotheses. Report the significance of your test statistics and test the hypotheses in your model. Explain if each edge occurs more often than chance and whether that finding is statistically significant.**
+
+
+
+# Covariate Network ERGM
+
+Now we will turn to the covariate network and our additional hypotheses.
+
+```{r Building the Ergm Model for the Covariate Network, cache=TRUE}
+model2 <- ergm(CRIeq ~ edges 
+               + mutual                           # H1
+               + dgwesp(0.5, fixed=T, type="OTP") # H2b: OTP "transitive shared partner" ordered pair (i,j) iff i->k->j.
+               + nodeicov("EX")                   # H3a
+               + nodeocov("EX")                   # H3b
+               + edgecov(CAIeq)                   # H4
+) 
+summary(model2) 
+```
+
+## Analysis
+
+**Explain each ERGM term and its relationship to your hypotheses. Report the significance of your test statistics and test the hypotheses in your model.**
+
+# Model Diagnostics
+
+Next, judge convergence of the MCMC processes of the first model, using the `mcmc.diagnostics()` function. The function will plot the change of model statistics during the last iteration of the MCMC estimation procedure. For each model statistic, the left hand side plot gives the change of the statistic with iterations, and the right hand side plot is a histogram of the statistic values. Both are normalized, so the observed data locate at 0.
+
+```{r MCMC Model 1, fig.width=10, fig.fullwidth= TRUE, fig.cap = "MCMC Diagnostics, Model 1.", cache = TRUE}
+mcmc.diagnostics(model1)      # Performs the markov chain monte carlo diagnostics
+```
+
+Repeat the process for the second model.
+
+```{r MCMC Model 2, fig.width=10, fig.fullwidth= TRUE, cache = TRUE, fig.cap = "MCMC Diagnostics, Model 2.",}
+mcmc.diagnostics(model2)      # Performs the markov chain monte carlo diagnostics
+```
+
+## Analysis
+
+**Has the MCMC process converged to a desired state for each ERGM term? Explain how you interpret the plots.**
+
+# Model Evaluation
+
+To evaluate the goodness-of-fit for our model, we need to simulate many variations of the model.^[*See* `?? simulate` for more information.]
+
+```{r GOF Model Simulation, cache = TRUE, echo=FALSE, include=FALSE}
+sim <- simulate(model1, burnin=100000, interval=100000, nsim=100, verbose=T)  # Uses the ergm model to simulate a null model      
+```
+
+Let's visually inspect two of our random networks based on our first model.
+
+```{r Random Model Example 1, fig.width=10, fig.fullwidth= TRUE, cache = TRUE, fig.cap = "Random Graph Variant, Example 1",}
+ggnet2(sim[[1]], mode = baseLayout, label = TRUE, arrow.size = 8, edge.color="blue", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) + guides(color = FALSE, size = FALSE)
+```
+
+```{r Random Model Example 10, fig.width=10, fig.fullwidth= TRUE, cache = TRUE, fig.cap = "Random Graph Variant, Example 1",}
+ggnet2(sim[[10]], mode = baseLayout, label = TRUE, arrow.size = 8, edge.color="orange", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) + guides(color = FALSE, size = FALSE)
+```
+
+Next we're going to extract the number of triangles from each of the 100 samples, create a histogram of that model, and place a red arrow at the value of the observed network.
+
+```{r Triangle Distribution, fig.width=10, fig.fullwidth= TRUE, cache = TRUE, fig.cap = "Triangle Distribution"}
+model.tridist <- sapply(1:100, function(x) summary(sim[[x]] ~triangle)) # Extracts the tiangle data from the simulated networks
+hist(model.tridist, xlim=c(0,140), breaks = 20)                                     # Plots that triangle distribution as a histogram
+CRIeq.tri <- summary(CRIeq ~ triangle)                                  # Saves the CRIeq triangle data from the summary to the CRI.eq variable
+arrows(CRIeq.tri,20, CRIeq.tri, 5, col="red", lwd=3)                    # Adds an arrow to the plotted histogram
+```
+
+## Analysis
+
+**Is the distribution of triangles in your simulation a good match with the distribution of triangles in your observed network?**
+
+# Goodness of Fit
+
+Next, we will calculate the Goodness of Fit for several of the parameters in our model.
+
+```{r GOF Calc, include = FALSE, echo = FALSE}
+gof <- gof(model1 ~ idegree + odegree + espartners + distance, verbose=T, burnin=1e+5, interval=1e+5) 
+```
+```{r, include = FALSE}
+gof
+```
+
+
+```{r Goodness of Fit, fig.width=10, fig.fullwidth= TRUE, cache = TRUE, fig.cap = "Goodness of Fit"}
+# -------------------------------------------------------------------------------------------------
+# Test the goodness of fit of the model
+# Compiles statistics for these simulations as well as the observed network, and calculates p-values 
+# -------------------------------------------------------------------------------------------------
+
+par(mfrow=c(2,2))   # Separate the plot window into a 2 by 2 orientation
+plot(gof)           # Plot the goodness of fit
+```
+
+## Analysis
+
+**Evaluate the plots and summary statitistics of the Goodness of Fit measures for Model 1. Are the four terms evaluated show a good fit between the simulated networks and the observed network?**^[In general, for configurations in the model, the fit is considered good if │*t*│≤ 0.1. For configurations not included in the model, the fit is considered good if 0.1<│*t*│≤ 1, and not extreme if 1< │*t*│≤ 2. For your plot, the dark black line represents the data for the observed network. The boxplots represent the distribution of corresponding degrees across the simulated networks, and the soft lines are the 95% confidence intervals. ]
+
+# Finishing Up
+

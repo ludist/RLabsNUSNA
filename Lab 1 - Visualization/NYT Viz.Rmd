@@ -1,0 +1,411 @@
+---
+title: 'Descriptive Analytic Exercise 1: Visualizing and Interpreting Networks'
+output:
+  tufte::tufte_html: default
+---
+**SNA Grad Seminar, Fall 2017**
+**Due:** October 24th, 11:59 pm
+**Name of Student**: 
+
+The purpose of this lab is to develop your familiarity conducting descriptive network analysis using the statistical software package R. This assignment will make use of a data set you collect by defining a search query (a collection of your user-defined search terms) from the *[New York Times](www.nytimes.com)*'s Article Search [Application Programming Interface](https://en.wikipedia.org/wiki/Application_programming_interface). Networks are generated from the co-occurrences between search terms included in the same search query. For example, a link exists between “apple” and “orange” if there are articles in the *New York Times* that contained these two terms.  You will be visualizing and interpreting individual and global network properties of this network.
+
+You will be graded primarily on the completeness and accuracy of your responses, but the clarity of the prepared report will also affect your grade.  While students may work together to perform the analysis, each student must submit his or her own report and is responsible for writing the narrative in the report. You must answer all of the bolded questions.
+
+# Part 1: Collect Network Data (20 pts)
+
+For this lab, you will search the *New York Times*, save that data, create networks from that data, compare the differences among networks, and demonstrate your proficiency with basic network descriptive statistics.
+
+## Loading and Installing Packages, Set Working Directory
+
+When working with R, you should run each line of code individually, unless it is part of a function definition, so you can see the results. Generally speaking, any line of code that includes '{' (the beginning of a function definition) should be run with all the other lines until you hit '}'.
+
+```{r}
+# Lines that start with a hashtag/pound symbol, like this one, are comment lines. Comment lines are ignored by R when it is interpreting code.
+# You only need to install packages once. Remove the # in front of each line and then run it to install each package. After successful installation, delete the line of code or replace the #s so the R Notebook doesn't run into problems.
+# install.packages('magrittr', repos = "https://cran.rstudio.com")
+# install.packages('igraph', repos = "https://cran.rstudio.com")
+# install.packages('httr', repos = "https://cran.rstudio.com")
+# install.packages('data.table', repos = "https://cran.rstudio.com")
+# install.packages('dplyr', repos = "https://cran.rstudio.com")
+# install.packages('xml2', repos = "https://cran.rstudio.com")
+# You need to load packages every time you run the script or restart R.
+library(magrittr)
+library(httr)
+library(data.table)
+library(igraph)
+library(dplyr)
+library(xml2)
+# Set your directory for the project
+# You can either enter your filename path within the parentheses below and remove the # creating the comment, or select "Session > Set Working Directory ... Source File Location" in R Studio.
+# setwd("Input Directory")
+```
+
+## Choose a topic for your search terms
+
+You can decide search terms based on personal interests, research interests, or popular topical areas, among others. You have flexibility in selecting your search term list. For example, you can search for some commercial brands, celebrities, countries, universities, etc. It will be most useful if you choose a collection of words that are not all extremely common. Think about a set of words that might have interesting co-occurrences in articles within the *New York Times* website. For example, you might be interested in the last names of every Senator involved in a certain political debate, football teams, or cities and their co-occurrence in news articles. Generally speaking, proper nouns are best, but you might have compelling reasons to choose verbs or adjectives. You might want to throw a couple of terms in that aren't thematically related to make sure you don't get a totally connected component. The more interesting your network is in terms of differing centrality, distinct components, etc., the easier it will be to do the written analysis. Keep in mind that the Article Search archive is very large; many terms co-occur. You might want to consider two tenuously related subjects. The example file uses four football teams and their home senators, plus a few topical terms.
+
+## Create your text input
+
+Create a plain text file with .txt extension in the same directory as the R Markdown Notebook used in this assignment. Make a note of the file name for use in the next code snippet. Place one search term per line, and use 15–20 terms.  You'll also likely want to add quotation marks around your search terms to ensure that you're only receiving results for the complete term. NOTE: The function will process your terms so that they work in the URL request. You do not need to encode non-alphabetic characters.
+
+The text file cannot include any additional information or characters and it must be a .txt file; Word or RTF documents won’t work.
+
+## Analysis
+
+**a.	Provide a high level overview of the terms you included in the search query.**
+
+**b.	Why did you choose this collection of terms?  Were there some specific overarching question—intellectual or extracurricular curiosity—that motivated this collection of terms?**
+
+**c.	How did you decide which terms to use in the search query? Were these terms you intuitively deemed important? Were they culled from a specific source or the result of some separate analysis or search query?**
+
+**d.	What are the insights you hope to glean by looking at the network of terms in terms of individual node metrics, sub-grouping of nodes, overall global network properties?**
+
+## Working with the API to Collect Your Data
+The *New York Times* controls access to its API by assigning each user a key. Each key has a limited number of calls that can be made within a certain time period. You can read more about the limitations of the API system [here](http://developer.nytimes.com/article_search_v2.json#).
+
+You will need to create your own API key to complete this assignment. Go to the *New York Times* [developers page](https://developer.nytimes.com/signup) and request a key. You will copy that key (received via email) into the api variable below.
+
+```{r, eval=FALSE, include=TRUE}
+# Import your word list
+name_of_file <- "NFL.txt" # Creates a variable called name_of_file that you should populate with the name of your text file between quotation marks.
+word_list <- read.table(name_of_file, sep = "\n", stringsAsFactors = F) %>% unlist %>% as.vector # Reads the content of your file into a variable.
+num_words <- length(word_list) # Creates a variable with the number of words in your list.
+url_base <- "https://api.nytimes.com/svc/search/v2/articlesearch.json"
+# When you receive the email with your API key, paste it below between the quotation marks.
+api <- '76f06c3d16c54280b9233d8f3d76e4bf'
+```
+
+Our first function will gather all of the search terms and their number of hits to be placed in a table. All lines of a function should be run together.
+
+```{r, eval=FALSE, include=TRUE}
+Get_hits_one <- function(keyword1) {
+  Sys.sleep(time=3)
+  url <- paste0(url_base, "?api-key=", api, "&q=", URLencode(keyword1),"&begin_date=","20160101") # Begin date is in format YYYYMMDD; you can change it if you want only more recent results, for example.
+  # The number of results
+  print(keyword1)
+  hits <- content(GET(url))$response$meta$hits %>% as.numeric
+  print(hits)
+  # Put results in table
+  c(SearchTerm=keyword1,ResultsTotal=hits)
+}
+```
+
+Now we will invoke our function to put information from the API into our global environment.
+
+```{r, eval=FALSE, include=TRUE}
+#Create a table of your words and their number of results.
+total_table <- t(sapply(word_list,Get_hits_one))
+total_table <- as.data.frame(total_table)
+total_table$ResultsTotal <- as.numeric(as.character(total_table$ResultsTotal))
+```
+If you get zero hits for any of these terms, you should substitute that term for somethign else and rerun the lab up to this point.
+Next, we will define the function that will collect the article co-occurences network.
+```{r, eval=FALSE, include=TRUE}
+Get_hits_two <- function(row_input) {
+  keyword1 <- row_input[1]
+  keyword2 <- row_input[2]
+  url <- paste0(url_base, "?api-key=", api, "&q=", URLencode(keyword1),"+", URLencode(keyword2),"&begin_date=","20160101") #match w/ Begin Date in Get_hits_one.
+  # The number of results
+  print(paste0(keyword1," ",keyword2)) 
+  hits <- content(GET(url))$response$meta$hits %>% as.numeric
+  print(hits)
+  Sys.sleep(time=3)
+  # Put results in table
+  c(SearchTerm1=keyword1,SearchTerm2=keyword2,CoOccurrences=hits)
+} 
+```
+
+In this next step, we will call the API and collect the co-occurrence network. This may take some time. If you receive "numeric(0)" in any of your resposnes, you've likely hit your API key limit and will either need to wait for the calls to reset (24 hours) or request a new key. If you receive the error message "$ operator is invalid for atomic vectors," you have also hit the API call limit. This could be due to running the script multiple times, or due to hitting too many results based on very common search terms. Request a new API, shorten your word list, and try again. Don't forget you need to reload your word list from the first part of the Lab in order to get a different set of results! You must also rerun the functions to reassign the API value. If none of your results come back as "0," you might want to redo your search with the appropriate words.
+
+```{r, eval=FALSE, include=TRUE}
+# Convert the pairs list into a table
+pairs_list <- expand.grid(word_list,word_list) %>% filter(Var1 != Var2)
+pairs_list <- t(combn(word_list,2))
+#Create a network table, run the Get_hits_two function using the pairs lists
+network_table <- t(apply(pairs_list,1,Get_hits_two))
+#Convert the network table into a dataframe
+network_table <- as.data.frame(network_table)
+# Read each the content of each item within the $CoOccurreences factor as characters, 
+# then force those characters into the "numeric" or "double" type.
+network_table$CoOccurrences <- as.numeric(as.character(network_table$CoOccurrences))
+# Convert data to data.table type.
+total_table <- as.data.table(total_table)
+network_table <- as.data.table(network_table)
+
+# Remove zero edges from your network
+network_table <- network_table[!CoOccurrences==0] 
+
+# Create a graph object with your data
+g_valued <- graph_from_data_frame(d = network_table[,1:3,with=FALSE],directed = FALSE,vertices = total_table)
+
+# If you're having trouble with data collection, you can load the 'NFL Lab Results.RData' file now by clicking the open folder icon on the "Environment"" tab and continue the lab from here. You'll need to figure out what the significance of the terms are yourself, however.
+# You should save your data at this point by clicking the floppy disk icon under the "Environment" tab.
+```
+
+```{r, include=FALSE}
+load("NFL Lab Results.RData")
+```
+
+## Analysis
+
+**Is the graph directed or undirected?** 
+
+**How many nodes and links does your network have? **
+```{r}
+numVertices <- vcount(g_valued)
+numVertices
+numEdges <- ecount(g_valued)
+numEdges
+```
+
+**What is the number of possible links in your network? **
+```{r}
+maxEdges <- numVertices*(numVertices-1)/2
+maxEdges
+```
+
+**What is the density of your network?** 
+```{r}
+graphDensity <- numEdges/maxEdges # manual calculation
+graphDensity
+graphDensity1 <- graph.density(g_valued) # using the graph.density function from igraph
+graphDensity1
+```
+
+**Briefly describe how your choice of dataset may influence your findings.**  What differences would you expect if you use different search terms? Are the current search terms related to one another? If so, how? Do you think the limitation to one word might skew your answers? (i.e. if you’re interested in Hillary Clinton, but you include “Clinton” as a term, you will get stories that mention Chelsea, Bill, & even P-Funk Allstar George Clinton).
+
+# Part 2: Visualize Your Network (20 points)
+
+Let's start by visualizing the network that we've collected from the *New York Times* Article Search API. We'll need to choose node colors and set a layout. You can learn more about Fruchterman Reingold layout and other layouts [here](http://igraph.org/r/doc/layout_with_fr.html).
+
+```{r}
+## Learn more about plotting with igraph
+?? igraph.plotting
+colbar = rainbow(length(word_list)) ## we are selecting different colors to correspond to each word
+V(g_valued)$color = colbar
+# Set layout here 
+L = layout_with_fr(g_valued)  # Fruchterman Reingold
+
+```
+
+```{r fig-margin, fig.margin = TRUE, fig.cap ="Initial visualization."}
+plot(g_valued,vertex.color=V(g_valued)$color, layout = L, vertex.size=6) 
+
+```
+
+## Analysis
+**In a paragraph, describe the macro-level structure of your graphs based on the Fruchterman Reingold visualization.**
+Is it a giant, connected component, are there distinct sub-components, or are there isolated components?  Can you recognize common features of the subcomponents?  Does this visualization give you any insight into the co-occurrence patterns of the search-terms?  If yes, what? If not, why?
+
+Now we'll create a second visualization using a different layout.
+```{r}
+## You can change the layout by picking one of the other options. Uncomment one of the lines below by erasing the # and running the line. Try to find a layout that gives you different information that Fruchterman Reingold.
+
+ L = layout_with_dh(g_valued) ## Davidson and Harel
+
+# L = layout_with_drl(g_valued) ## Force-directed
+
+# L = layout_with_kk(g_valued) ## Spring
+plot(g_valued,vertex.color=V(g_valued)$color, layout = L, vertex.size=6) 
+```
+## Analysis
+
+**In a paragraph, compare and contrast the information given to you by the two different layouts.**
+
+# Part 3: Community Detection Analysis with R (20 Points)
+
+Identifying subgroups within a network is of great interest to social network researchers, so a variety of algorithms have been developed to identify and measure subgroups.  We will use some of R’s built-in tools to identify subgroups and central nodes for visual inspection.
+
+For the remainder of the visualizations we will use the Fruchterman Reingold layout.
+```{r}
+L = layout_with_fr(g_valued) 
+```
+
+Cluster the nodes in your network.
+```{r}
+# Learn more about the clustering algorithm.
+?? cluster_walktrap
+cluster <- cluster_walktrap(g_valued)
+# Find the number of clusters
+membership(cluster)   # affiliation list
+length(sizes(cluster)) # number of clusters
+# Find the size the each cluster 
+# Note that communities with one node are isolates, or have only a single tie
+sizes(cluster) 
+```
+
+**How many communities have been created?**
+
+**How many nodes are in each community?**
+In networks containing node attribute information, we can often gain insight into a network by looking at the nodes that get placed in the same partition. 
+**For your network, what might each cluster of nodes potentially have in common? Describe each cluster, its membership, and the relationship between nodes in the cluster.**
+Next we visualize the clusters by coloring nodes according to their modularity class. 
+```{r}
+plot(cluster, g_valued, col = V(g_valued)$color, layout = L, vertex.size=6)
+```
+
+**What information does this layout convey?  Are the clusters well-separated, or is there a great deal of overlap? Is it easier to identify the common themes among clusters in this layout rather than looking only at the graphs?**
+
+**What differences are there between nodes in the same cluster and across clusters?**
+
+**Describe the brokers between any components and cliques.  What are common features of these brokers?  About how many brokers would you have to remove from your network to "shatter" it into two or more disconnected components?**
+
+# Part 4: Centrality Visualization & Weighted Values (20 Points)
+
+For each network, you will use centrality metrics to improve your visualization. You may need to adjust the size parameter to make your network more easily visible.
+
+## Degree Centrality
+```{r}
+totalDegree <- degree(g_valued,mode="all")
+sort(totalDegree,decreasing=TRUE)[1:5]
+g2 <- g_valued
+V(g2)$size <- totalDegree*2 #can adjust the number if nodes are too big
+plot(g2, layout = L, vertex.label=NA)
+```
+**Briefly explain degree centrality and why nodes are more or less central in the network.**
+
+## Weighted Degree Centrality
+```{r}
+wd <- graph.strength(g_valued,weights = E(g_valued)$CoOccurrences)
+sort(wd,decreasing=TRUE)[1:5]
+wg2 <- g_valued
+V(wg2)$size <- wd*.1 # adjust the number if nodes are too big
+plot(wg2, layout = L, vertex.label=NA, edge.width=sqrt(E(g_valued)$CoOccurrences)) #taking the square root is a good way to make a large range of numbers visible in an edge. Otherwise edges tend to cover up all the other edges and obscure the relationships.
+```
+**What does the addition of weighted degree and edge information tell you about your graph?**
+
+## Betweenness Centrality
+```{r}
+b <- betweenness(g_valued,directed=TRUE)
+sort(b,decreasing=TRUE)[1:5]
+g4 <- g_valued
+V(g4)$size <- b*1.2#can adjust the number
+plot(g4, layout = L, vertex.label=NA)
+```
+**Briefly explain betweenness centrality and why nodes are more or less central in the network.**
+
+### Weighted Betweenness Centrality
+```{r}
+wbtwn <- betweenness(g_valued,weights = E(g_valued)$CoOccurrences)
+sort(wbtwn,decreasing=TRUE)[1:5]
+wBtwnG <- g_valued
+V(wBtwnG)$size <- wbtwn*.5 # adjust the number if nodes are too big
+plot(wBtwnG, layout = L, vertex.label=NA, edge.width=sqrt(E(g_valued)$CoOccurrences)) #taking the square root is a good way to make a large range of numbers visible in an edge.
+```
+**What does the addition of weighted degree and edge information tell you about your graph?**
+
+## Closeness Centrality
+```{r}
+c <- closeness(g_valued)
+sort(c,decreasing=TRUE)[1:5]
+g5 <- g_valued
+V(g5)$size <- c*500  #can adjust the number
+plot(g5, layout = L, vertex.label=NA)
+```
+**Briefly explain closeness centrality and why nodes are more or less central in the network.**
+
+### Weighted Closeness Centrality
+
+```{r}
+wClsnss <- closeness(g_valued,weights = E(g_valued)$CoOccurrences)
+sort(wClsnss,decreasing=TRUE)[1:5]
+wClsnssG <- g_valued
+V(wClsnssG)$size <- wClsnss*1000 # adjust the number if nodes are too big
+plot(wClsnssG, layout = L, vertex.label=NA, edge.width=sqrt(E(g_valued)$CoOccurrences)) #taking the square root is a good way to make a large range of numbers visible in an edge.
+```
+**What does the addition of weighted degree and edge information tell you about your graph?**
+
+## Eigenvector Centrality
+```{r}
+eigc <- eigen_centrality(g_valued,directed=TRUE)
+sort(eigc$vector,decreasing=TRUE)[1:5]
+g6 <- g_valued
+V(g6)$size <- eigc$vector*50 #can adjust the number
+plot(g6, layout = L, vertex.label=NA)
+```
+
+**Briefly explain eigenvector centrality and why nodes are more or less central in the network.**
+
+## Analysis
+**Choose the visualization that you think is most interesting and briefly explain what it tells you about a central node in your network. Discuss the type of centrality, and what that node’s centrality score tells you about the search co-occurrence network.**
+
+**Briefly discuss an interesting difference between types of centrality for your network.**
+
+## Global Network Metrics with R
+
+Compute the network centralization scores for your network for degree, betweenness, closeness, and eigenvector centrality.
+
+```{r}
+# Degree centralization
+centralization.degree(g_valued,normalized = TRUE)
+
+# Betweenness centralization
+centralization.betweenness(g_valued,normalized = TRUE)
+
+# Closeness centralization 
+centralization.closeness(g_valued,normalized = TRUE)
+
+# Eigenvector centralization 
+centralization.evcent(g_valued,normalized = TRUE)
+
+```
+**Record the centralization score of each centrality measure.**
+
+**Briefly explain what the centralization of a network is.**
+
+**Compare the centralization scores above with the graphs you created where the nodes are scaled by centrality. Describe the appearance of more centralized v. less centralized nodes.**
+
+## Part 5. Power Laws & Small Worlds (20)
+
+## Power Laws
+Networks often demonstrate power law distributions. Plot the degree distribution of the nodes in your base graph. 
+```{r}
+# Calculate degree distribution
+deg <- degree(g_valued,v=V(g_valued), mode="all")
+deg
+
+# Degree distribution is the cumulative frequency of nodes with a given degree
+deg_distr <-degree.distribution(g_valued, cumulative=T, mode="all")
+deg_distr
+plot(deg_distr, ylim=c(.01,10), bg="black",pch=21, xlab="Degree", ylab="Cumulative Frequency") #You may need to adjust the ylim to a larger or smaller number to make the graph show more data.
+```
+
+Test whether it’s approximately a power law, estimate log f (k) = log a − c log k. “This says that if we have a power-law relationship, and we plot log f (k) as a function of log k, then we should see a straight line: −c will be the slope, and log a will be the y-intercept. Such a “log-log” plot thus provides a quick way to see if one’s data exhibits an approximate power-law: it is easy to see if one has an approximately straight line, and one can read off the exponent from the slope.” (E&K, Chapter 18, p.546).
+
+```{r}
+power <- power.law.fit(deg_distr)
+power
+plot(deg_distr, log="xy", ylim=c(.01,10), bg="black",pch=21, xlab="Degree", ylab="Cumulative Frequency")
+```
+
+**Does your network exhibit a power law distribution of degree centrality?**
+
+## Small Worlds
+
+Networks often demonstrate small world characteristics. Compute the average clustering coefficient (ACC) and the characteristic path length (CPL).
+```{r}
+# Average clustering coefficient (ACC)
+transitivity(g_valued, type = c("average"))
+
+# Characteristic path length (CPL)
+average.path.length(g_valued)
+```
+
+Compute the ACC and CPL for 100 random networks with the same number of nodes and ties as your test network. 
+
+```{r}
+accSum <- 0
+cplSum <- 0
+for (i in 1:100){
+  grph <- erdos.renyi.game(numVertices, numEdges, type = "gnm")
+  accSum <- accSum + transitivity(grph, type = c("average"))
+  cplSum <- cplSum + average.path.length(grph)
+}
+accSum/100
+cplSum/100
+```
+
+**Based on these data, would you conclude that the observed network demonstrates small world properties? Why or why not?**
+
+## Wrapping up
+To complete the lab, make sure output/previews have been generated for each block of code. Then click the "Publish" button on the upper right hand corner of this screen and sign up for an RPubs account. Submit the URL of the published, completed lab on Canvas.

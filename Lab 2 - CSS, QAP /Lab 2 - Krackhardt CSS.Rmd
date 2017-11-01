@@ -1,0 +1,500 @@
+---
+title: "Lab 2: QAP, CSS & Structural Equivalence"
+subtitle: "Re-Analyzing Friend & Advice Networks from Krackhardt (1987)"
+author: "Student Name Here"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+---
+
+# Introduction
+
+This lab will examine how to measure individuals’ perceived structure of social networks (cognitive social structures or CSS) and how to analyze these perceptions, drawing on notions of structural equivalence and quadratic assignment procedure discussed in class. 
+
+We will be using the Krackhardt’s Advice and Friendship data sets. ^[This is the data set reported in Krackhardt, D. (1987) "Cognitive Social Structures," *Social Networks*, 9: 109—34. Reading that paper before carrying out the analysis is **strongly recommended.** The 21 respondents are managers in a company.]
+
+There are four sections to this lab below: CSS analysis, visualization, structural equivalence, and differences and correlation. We are not looking for an essay response to every question, but you should succinctly convey that you understand how to interpret and make inferences based on the outputs from these analyses.
+
+This assignment is designed to use the *sna* package in the R statistical programming language.^[*See* Butts, Carter T., *sna: Tools for Social Network Analysis*, R package version 2.4.; *see also* `?? sna` for documentation and Butts, Carter T. (2008). “Social Network Analysis with sna.” *Journal of Statistical Software*, 24(6).] You are provided the RData file. *krackhardt_css_data.RData*
+
+Our visualization for this exercise will be done using *ggnet2*,^[Moritz Marbach and Francois Briatte, with help from Heike Hoffmann, Pedro Jordano and Ming-Yu Liu; *see* `?? ggnet2`.]  a visualization package which applies the visualization framework developed in *ggplot2*, an up-and-coming visualization framework created by RStudio that is well on its way to being recognized as the professional standard in R visualization.^[*See* `?? ggplot2`, and [the tidyverse website](http://ggplot2.tidyverse.org).]  
+
+## Before You Start:
+
+Because you will not be collecting data in this lab, feel free to knit early and often to see how your responses are being formatted! Please do your best to maintain the formatting provided by this assignment. It makes grading significantly easier when answers are easy to read.
+
+Download all the files for this lab and save them in the same folder. Open the CSS_Lab.R file in RStudio (File > Open). After the R script is loaded in the editor, set the working directory so that R knows where to find the RData file you are going to load (Session > Set Working Directory > To Source File Location). 
+
+The data file *krackhardt_css_data.RData* consists of two CSS data objects:
+
+●	*advice_nets*: respondents’ perceptions about their own and others’ advice ties within the organization
+
+●	*friendship_nets*: respondents’ perceptions about their own and others’ friendship ties within the organization
+
+```{r Installation, include = FALSE, eval=FALSE}
+# First, we'll load our data and install relevant packages.
+
+# The "include = FALSE" argument included in this R chunk will prevent the results of the following code from appearing in your published HTML file.
+# Install the relevant packages by uncommenting (i.e. deleting the pound sign beginning each line) the code below installing the packages.
+# Note: You only need to install packages once. You must run this block of code manually before you can knit this file. Because the header begins with eval=FALSE, R will not process this code when knitting the markdown document into HTML. When you knit this file in the future, it will not be evaluated; installation of packages will halt knitting.
+
+install.packages('NetData')
+install.packages('sna')
+install.packages('intergraph')
+install.packages('ggplot2')
+install.packages('GGally')
+install.packages('tufte')t
+install.packages('knitr')
+install.packages('scales')
+```
+```{r Package & Data Loading, include=FALSE}
+# # Load libraries
+# Note: packages must be loaded every time the script is run.
+library('intergraph')
+library('igraph') # igraph and SNA do not get along because they use the same function names; beware loading both of them together in other projects.
+library('network')
+library('sna')
+library('NetData')
+library('ggplot2')
+library('GGally')
+library('tufte')
+library('knitr')
+library('scales')
+# Make sure you've set your directory to the folder where the "krackhardt_css_data.RData" is saved
+# Load the Krackhardt advice/friendship data
+# For more info see: https://cran.r-project.org/web/packages/NetData/NetData.pdf
+load('krackhardt_css_data.RData')
+rowNames <- c(1:21) # This is a vector consisting of numbers 1-21 for use in table construction.
+```
+
+# I. CSS Analysis and Extraction (**20 pts**)
+
+We'll begin by viewing an example response matrix. Notice that this is a binary sociomatrix.
+
+```{r Advice Matrix Table, echo = FALSE}
+rownames(advice_matrix) <- rowNames
+kable(advice_matrix, row.names = TRUE, caption = "Advice Matrix Table")
+```
+
+The `advice_nets` and `friendship_nets` objects are R lists that each contain 21 networks, one for each respondent’s perception about what the advice and friendship networks look like. Let's view the characteristics of a sample friendship network. We'll visualize the ties within that network in the next Part.
+
+```{r Individual Repsondent Network, echo=FALSE}
+kable(as.matrix(friendship_nets[[1]]), caption = "Individual Respondent Network") # You can choose which respondent's summary statistics to view by changing the number.
+```
+
+`r newthought('Next, we\'ll aggregate')` the individual observations of each actor within the network into a single network. There are multiple ways to do so. Each presents a different manner of combining the 21 responses into a single aggregated network. These include four locally aggregated structures (LAS) and one consensus aggregated structure. First, we calculate the four LAS: row, column, intersection, and union. 
+
+# Friendship, Column.
+
+```{r Friendship Column, echo = FALSE}
+## You should read the consensus documentation to understand what the consensus function is doing by uncommenting the following line.
+## ?? sna::consensus
+fr_column <- consensus(friendship_nets, mode="digraph", diag=FALSE, method="OR.col")
+rownames(fr_column) <- rowNames
+kable(fr_column, col.names = rowNames, row.names = TRUE, caption = "Friendship, Column Matrix")
+```
+
+
+# Friendship, Row.
+
+```{r Friendship Row, echo = FALSE}
+fr_row <- consensus(friendship_nets, mode="digraph", diag=FALSE, method="OR.row")
+options(width=150)
+row.names(fr_row) = rowNames
+kable(fr_row, col.names = rowNames, row.names = TRUE, caption = "Friendship, Row")
+```
+
+## Analysis
+
+**Conceptually, how do these two networks differ from one another?  What are the pros and cons of using this method?**
+
+# Friendship, Intersection.
+
+```{r Friendship intersection, echo = FALSE}
+fr_intersection <- consensus(friendship_nets, mode="digraph", diag=FALSE, method="LAS.intersection")
+row.names(fr_intersection) <- rowNames
+kable(fr_intersection, row.names = TRUE, col.names = rowNames, caption = "Friendship Intersection")
+```
+
+## Analysis
+
+**What information does the ‘intersection’ method capture? What are the pros and cons of using this method?**
+
+# Friendship, Union.
+
+```{r Friendship Union, echo = FALSE}
+fr_union  <- consensus(friendship_nets, mode="digraph", diag=FALSE, method="LAS.union")
+row.names(fr_union) <- rowNames
+kable(fr_union, col.names = rowNames, row.names = TRUE, caption="Friendship Union")
+```
+
+## Anaylsis
+
+**What kind of information does the union method capture?  What are the pros and cons of using this method?**
+
+# Friendship, Median.
+```{r Friendship Median, echo = FALSE, fig.cap="Testing Friendship median"}
+fr_median <- consensus(friendship_nets, mode="digraph", diag=FALSE, method="central.graph")
+row.names(fr_median) <- rowNames
+kable(fr_median, col.names = rowNames, row.names = TRUE, caption = "Friendship Median")
+```
+
+## Analysis
+**What kind of information does the median measure capture?  What are the pros and cons of using this method?**
+
+Finally, we'll also load the data for our advice network for later analysis.
+```{r Load Advice Networks, width=100}
+ad_column <- consensus(advice_nets, mode="digraph", diag=FALSE, method="OR.col")
+ad_row    <- consensus(advice_nets, mode="digraph", diag=FALSE, method="OR.row")
+ad_intersection <- consensus(advice_nets, mode="digraph", diag=FALSE, method="LAS.intersection")
+ad_union  <- consensus(advice_nets, mode="digraph", diag=FALSE, method="LAS.union")
+ad_median <- consensus(advice_nets, mode="digraph", diag=FALSE, method="central.graph")
+```
+
+
+# II. Visualization (**25 pts**)
+
+```{r, include=FALSE, echo = FALSE}
+library('igraph')
+library('intergraph')
+```
+
+# Define Network Structure 
+
+First, we're going to define the position of the nodes on the network so that it is easier to compare edges across graphs.
+
+```{r Creating the Base Graph Structure, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Base Graph Structure", warning=FALSE, echo=FALSE}
+# Feel free to edit this portion of the code if you would like to plot different aggregated measures.
+# We're going to fix the location of the first network to make comparisons across visualizaitons easier.
+# Plot the fr_union network.
+
+fr_union_net <- graph.adjacency(fr_union) # make an igraph network object from the friend union adjacency matrix
+
+# Here, we're going to define our base layout. The example below uses fruchtermanreingold, but you can use any layout described in gplot.layout. kamadakawai is also a good choice. We're setting the edge color to the same as the background color so you can only see the nodes and their position. We could also do this by setting edge.width to zero, which would be a more robust solution if you were to change the default background color for the rest of the document. This layout is going to be the one that all of the other layouts use in your previews, so you might want to run it a couple of times until you get one that you like. Alternatively, you can use set.seed() and provide a value to make sure you get the same result every time when knitting the document.
+# ?? gplot.layout
+baseGraph <- ggnet2(fr_union_net, mode = 'fruchtermanreingold', edge.color="#fffff8", label = TRUE) + theme(panel.background = element_rect(fill = "#fffff8"))
+baseGraph
+# Now we're going to create a matrix with two vectors, the first the X coordinate of each node in the base graph, and the second the Y coordinate. baseGraph is a ggplot data-type, and it has a vector named "data" which contains various vectors, including X and Y. We also have to set the number of rows to initialize the matrix.
+baseLayout <- matrix(c(baseGraph$data$x, baseGraph$data$y), nrow=length(baseGraph$data$x), ncol = 2)
+```
+
+# Plot Two Aggregated Friendship Networks
+
+Using our initial node placement as a template, we will now visualize the ties for aggregated networks.
+
+```{r Friendship Union Visualization, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Friendship, Union.", warning=FALSE, echo=TRUE}
+# If you pass ggnet2 the mode value of a matrix, it will use the first two vectors to position the nodes on their x and y axes. Thus, if we call baseLayout throughout the rest of the visualizations, the nodes will remain in place but the edges drawn between the visualizations will change. 
+ggnet2(fr_union_net, mode = baseLayout, label = TRUE,  arrow.size = 8, edge.color="red", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8"))
+```
+
+## Analysis
+
+**Describe what this network shows in your own words.**
+
+```{r Friendship Row Visualization, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Friendship, Row.", warning=FALSE, echo = FALSE}
+# Plot the fr_row network.
+fr_row_net <- graph.adjacency(fr_row)     # make an igraph network object from the friend row adjacency matrix
+ggnet2(fr_row_net, mode = baseLayout, label = TRUE,  arrow.size = 8, edge.color="green", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) # plots the friendship union network
+```
+
+## Analysis
+
+**Describe what this network shows in your own words.**
+
+**What are the relevant similiarities and differences between the two networks? What do they mean?**
+
+# Plot Two Aggregated Advice Networks
+
+Choose two of the aggregated advice networks calculated above to visualize.
+
+```{r Advice, Intersection Visualization, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Advice, Intersection.", warning=FALSE}
+# Feel free to edit this portion of the code if you would like to plot different aggregated measures.
+# Plot the ad_intersection network.
+ad_intersect_net <- graph.adjacency(ad_intersection) # make an igraph network object from the advice intersection adjacency matrix
+
+ggnet2(ad_intersect_net, mode = baseLayout, label = TRUE,  arrow.size = 8, edge.color="pink", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) # plots the advice intersection network
+```
+
+## Analysis
+
+**Describe what this network shows in your own words.**
+
+```{r Advice Median Visualization, fig-fullwidth, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Advice, Median.", warning=FALSE, echo = FALSE}
+# Plot the advice median network.
+ad_med_net <- graph.adjacency(ad_median)     # make an igraph network object from the advice median adjacency matrix
+
+ggnet2(ad_med_net, mode = baseLayout, label = TRUE,  arrow.size = 8, edge.color="purple", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) # plots the advice median network
+```
+## Analysis
+
+**Describe what this network shows in your own words.**
+
+**What are the relevant similiarities and differences between the two networks? What do they mean?**
+
+# Plot Two Individual Self-Report Networks
+
+Next, we'll plot two of the individual self-report networks. Choose two respondents (by number, 1—21) from either `advice_nets` or `friendship_nets`, or visualize both of a single respondent's self-reports.
+
+# Respondent Networks
+```{r Respondent Network Visualizaiton 1, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Respondent Network 1.", warning=FALSE, echo = FALSE}
+# Plot a single user's self reported network
+respondent_1_net <- asIgraph(advice_nets[[2]]) # this makes an igraph network of the respondent's network from the indexed # in the [[]]
+ggnet2(respondent_1_net, mode = baseLayout, label = TRUE,  arrow.size = 8, edge.color="blue", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) # plots the first respondent's network.
+```
+
+```{r Respondent Network 2, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Respondent Network 2.", warning=FALSE, echo = FALSE}
+respondent_2_net <- asIgraph(friendship_nets[[21]]) # this makes an igraph network of the respondent's network from the indexed # in the [[]]
+ggnet2(respondent_2_net, mode = baseLayout, label = TRUE,  arrow.size = 8, edge.color="lightgreen", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8")) # plots the first respondent's network.
+```
+
+## Analysis
+
+**What respondents did you choose to visualize? Why?**
+
+**What do their networks show? Can you draw any conclusions about each actor's role in the network?**
+
+# Plot the Intersection of the FR_Union and Ad_Union Networks
+
+Finally, we're going to plot the intersection of two networks.
+
+```{r Intersection of Friendship, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Intersection of Friendship, Union, and Advice, Union.", warning=FALSE, echo = FALSE}
+
+# Plot the intersection of two networks
+ad_union_net <- graph.adjacency(ad_union)  # makes a network object from the union of the advice networks
+union_intersection <- graph.intersection(fr_union_net,ad_union_net) # this makes an igraph network object from two matrices
+ggnet2(union_intersection, mode = baseLayout, label = TRUE,  arrow.size = 8, edge.color="brown", arrow.gap = 0.03) + theme(panel.background = element_rect(fill = "#fffff8"))    # plot the intersection of the friendship & advice union networks
+```
+
+## Analysis
+
+**What does this network show? Why might this visualization be useful?**
+
+# III. Structural Equivalence (**25 pts**)
+```{r Detach iGraph, echo = FALSE}
+detach(package:igraph) 
+```
+
+In this section, we will compute the structural equivalence among the actors using the locally aggregated structure (LAS). Based upon the exploratory visualizations you created in Part II, choose one LAS structure for both the AD and FR relation type to compute structural equivalence (e.g. *ad_union* and *fr_union*).
+
+## Analysis
+
+**Outline your rationale for choosing your networks.**
+
+# Structural Equivalence Matrices
+
+Now, we'll generate the matrices used to evaluate structural equivalence. Note that we'll be using the Euclidean distance method.^[Hint: the way you interpret results using the Pearson correlation method and the Euclidean distance method are inverse. You should review the readings or slides from class to make sure you understand how to interpret results.]
+
+# Advice SEM
+
+```{r Advice SEM Network, cache = TRUE, echo = FALSE}
+??sedist # read the documentation on sedist so that you understand what the below code is doing
+
+ad_sem <- sedist(ad_union, g=c(1:dim(ad_union)[1]), method="euclidean") # compute structural equivalence in the advice network
+ad_sem[ad_sem < 0.001] <- NA # This line gets rid of our 0 values for self-reports. We'll need this when we're looking for our minimum values.
+row.names(ad_sem) <- rowNames
+kable(ad_sem, digits = 2, row.names = TRUE, col.names = rowNames, caption = "Advice SEM")
+```
+
+# Friendship SEM
+
+```{r Friendship SEM, cache = TRUE, echo=FALSE}
+fr_sem <- sedist(fr_union, g=c(1:dim(fr_union)[1]), method="euclidean") # compute structural equivalence in the friendship network
+fr_sem[fr_sem < 0.001] <- NA # This line gets rid of our 0 values for self-reports and replaces them with NA, a null value. We'll need this when we're looking for our minimum values, otherwise we'll get the self-report value as our minimum and that's no good.
+row.names(fr_sem) <- rowNames
+kable(fr_sem, digits = 2, row.names=TRUE, col.names = rowNames, caption = "Friendship SEM")
+```
+
+Take a moment to compare the structural equivalence matrices (SEM) for the advice and friendship networks that you analyzed. You might want to refer to previous visualizations. Notice that it's challenging to decode this information visually in matrix form, even for a relatively small network. We'll search the matrix programmatically to understand more about it.
+
+Next, we will identify the two nodes with the highest and lowest SEM Euclidean distance in each matrix as well as the mean value of distance across both networks.
+
+# Friendship SEM Summary Statitistics
+
+```{r Friendship SEM Euclidean Distance, echo = FALSE}
+print('Friendship SEM')
+# For the friendship SEM, what are the matrix coordinates of the lowest values, and what is that lowest value?
+which(fr_sem == min(fr_sem,na.rm = TRUE), arr.ind = TRUE) # Coordinates
+print('Min. Value:')
+min(fr_sem, na.rm = TRUE) # Lowest value
+
+# For the friendship SEM, what are the matrix coordinates of the highest values, and what is that value?
+which(fr_sem == max(fr_sem,na.rm = TRUE), arr.ind = TRUE) # Coordinates
+print('Max Value:')
+max(fr_sem, na.rm = TRUE) # highest value
+
+print('Mean Value:') # What's the average value of all distances?
+mean(fr_sem, na.rm = TRUE)
+```
+
+# Advice SEM Summary Statistics
+
+```{r Advice SEM, echo=FALSE}
+print('Advice SEM')
+# For the advice SEM, what are the matrix coordinates of the lowest values, and what is that lowest value?
+which(ad_sem == min(ad_sem,na.rm = TRUE), arr.ind = TRUE) # Coordinates
+print('Min. Value:')
+min(ad_sem, na.rm = TRUE) # Lowest value
+
+# For the advice SEM, what are the matrix coordinates of the highest values, and what is that value?
+which(ad_sem == max(ad_sem,na.rm = TRUE), arr.ind = TRUE) # Coordinates
+print('Max. Value:')
+max(ad_sem, na.rm = TRUE) # highest value
+
+print('Mean Value:') # What's the average value of all distances?
+mean(ad_sem, na.rm = TRUE)
+
+```
+
+## Analysis
+
+**How do you interpret high and low values in this matrix, calculated using Euclidean distance?**
+
+**Which network has the smallest minimum distance between nodes? Why might that be? You may want to refer to your earlier visualizations for more insight into the network.**
+
+**Which network has the greatest maximum distance between nodes? Why might that be?**
+
+**Which network exhibits more structural equivalence?**
+
+# IV. Differences and Correlation (**30 pts**)
+
+# Advice Networks
+
+```{r, eval=FALSE, echo=FALSE}
+?? sna::qaptest                # read the documentation on qaptest
+?? plot.qaptest           # read the documentation to help you interpret the qaptest plot. 
+```
+
+Now we will perform the QAP analysis on the advice networks by looping over every network in the list of networks and compare it against the median network we created in Part I. Let's take a look at one of those values.
+
+```{r Single QAP Summary, echo=FALSE}
+# Compare each respondent's advice network with the median network
+ad_median_net <- network(ad_median, directed=TRUE)      # create a median advice network for the ad_median calculation from Part I.
+
+sampleRespondent=advice_nets[[1]] # set i=advice_nets[[1]] to see what's going on for 1 individual
+              
+ad_qap <- qaptest(list(sampleRespondent,ad_median_net),gcor,g1=1,g2=2,reps=1000)
+summary(ad_qap) # summary of current individual's QAP test.
+```
+The summary of the QAP test includes a number of values:
+
+*Estimated p-values*: These estimate the probability of observing the test statistic (graph correlation in this instance) value. Qaptest will show both the probability of observing a value higher than or lower than the value observed. If the correlation is substantially higher than zero, these values will often be 1 and 0. This means that, during the QAP process no value was observed that was higher (or potentially lower) than the observed value. To confirm this, look at the Min/Max values in the distribution summary (see below).
+  
+*Test value*: This is the observed correlation between the two graphs.
+  
+*Distribution summary*: This summarizes the distribution of values calculated during the QAP process.
+
+```{r, cache=TRUE, echo=FALSE, include=FALSE}
+# Cache=TRUE is up there so that it doesn't rerun the computationally intensive QAP process every time you 'knit' your results.
+
+correlations <- c()           # initialize empty vector to store correlations
+count = 0                     # initialize a count object so we can track which network we're on in the below loop
+for (i in advice_nets){       # loop over each advice network and analyze individually; set i=advice_nets[[1]] to see what's going on for 1 individual
+  count = count + 1           
+  print(count)                
+  ad_qap <- qaptest(list(i,ad_median_net),gcor,g1=1,g2=2,reps=1000)   # use QAP to determine significance
+  s <- summary(ad_qap)                                  # summary of current individual's QAP test.
+  print(s)                                             
+  correlations <- c(correlations, s$testval)            # save the correlation for individual i
+}
+
+message(paste("Proportion of draws which were >= observed value:", ad_qap$pgreq))
+message(paste("Proportion of draws which were <= observed value:", ad_qap$pleeq))
+
+correlations
+```
+
+Look over the results that R printed to the console. Each result should begin with the respondent’s index number. Below, we'll summarize the results of the correlation between the consensus network and each of our 21 respondents.
+
+```{r, echo=FALSE}
+kable(correlations, digits = 2, row.names=TRUE)
+```
+
+## Analysis
+
+**Examining the results from above, which respondent’s perceptions were the most/least “accurate” when compared to the median response (assuming the consensus is the ground truth)?**^[Hint: look for the strongest correlation between the respondent’s network and the median network.]
+
+# QAP Plot, Advice
+
+Let's plot the QAP distribution for our advice networks.
+
+```{r Advice QAP Plot, fig.width = 10, fig.fullwidth = TRUE, fig.cap = "Advice QAP", warning=FALSE, echo=FALSE}
+plot.qaptest(ad_qap)     # plots qaptest
+                         # Note this is just the plot for the final fr_ad_qap from the above loop!
+```
+**Based on the results of the QAP test, is the most accurate observer's correlation with the consensus network significant or spurious? How does the graph above help you make that determination? Where would you draw a vertical line?**
+
+# Friendship Networks
+
+We will repeat this process for friendship networks. Take a look at your console output to answer the following question.
+
+```{r QAP Test for Friendship Networks, cache=TRUE, fig.width = 10, fig.fullwidth = TRUE, warning=FALSE, include=FALSE}
+# Cache=TRUE is up there so that it doesn't rerun the computationally intensive QAP process every time you 'knit' your results.
+# Compare each respondent's friendship network with the median network.
+fr_median_net <- network(fr_median, directed=TRUE)      # create a median friendship network for the ad_median calculation from Part I.
+
+correlations <- c()           # initialize empty vector to store correlations
+count = 0                     # initialize a count object so we can track which network we're on in the below loop
+for (i in friendship_nets){       # loop over each advice network and analyze individually; set i=friendship_nets[[1]] to see what's going on for 1 individual
+  count = count + 1           
+  print(count)                
+  fr_qap <- qaptest(list(i,fr_median_net),gcor,g1=1,g2=2,reps=1000)   # use QAP to determine significance
+  s <- summary(fr_qap)                                  # summary of current individual's QAP test.
+  print(s)                                             
+  correlations <- c(correlations, s$testval)            # save the correlation for individual i
+}
+
+message(paste("Proportion of draws which were >= observed value:", fr_qap$pgreq))
+message(paste("Proportion of draws which were <= observed value:", fr_qap$pleeq))
+```
+
+## Analysis
+
+**Are the results for the friendship network very similar or different from those you saw in the advice networks? Give some possible reasons why individuals have more precise representations of one kind of relation structure than another kind of relation structure.**
+
+# Considering Centrality
+
+Next, we will investigate the correlation between various centrality measures and the union consensus network.
+```{r Calculate Centralities, cache = TRUE, echo=FALSE}
+# Calculate centralities for the advice union consensus network
+  g.adj <- igraph::graph.adjacency(ad_union) #Establish base network.
+  d <- igraph::degree(g.adj) #Calculate degree centrality
+  b <- igraph::betweenness(g.adj,directed=TRUE) #Calculate betweenness centrality
+  c <- igraph::closeness(g.adj) #Calculate closeness centrality
+  e <- igraph::eigen_centrality(g.adj,directed=TRUE)$vector # Calculate Eigenvector centrality
+  
+  # Calculate the linear correlation between each centrality measure and the accuracy in predicting the median network
+cat("Correlation with Degree Centrality:", cor(correlations, d, method="kendall"), "\n")
+cat("Correlation with Betweennesss Centrality:", cor(correlations, b, method="kendall"), "\n") 
+cat("Correlation with Closeness Centrality:", cor(correlations, c, method="kendall"), "\n") 
+cat("Correlation with Eigenvector Centrality:", cor(correlations, e, method="kendall"), "\n") 
+```
+
+## Analysis
+
+**Which centrality score of individuals in the consensus network are most highly correlated with their accuracy in predicting the consensus network? Based on the readings, suggest a rationale why individuals’ embeddedness or patterning of ties might result in different perceptions.**
+
+# Identifying Most and Least Similar Respondent Viewpoints
+
+Next, we'll run the QAP test on the individual advice/friendship networks. Take a look at your console output to answer this question.
+
+```{r Friendship & Advice Network Comparison, cache = TRUE, include=FALSE, echo=FALSE}
+# Compare each respondent's friendship network with their advice network
+for (i in seq(1,21)){
+  print(i)                                             
+  fr_ad_qap <- qaptest(list(friendship_nets[[i]],advice_nets[[i]]),gcor,g1=1,g2=2,reps=1000) # does a qap test comparing that individual's friendship & advice networks
+  print(summary(fr_ad_qap))                                                            
+}
+```
+```{r Plot QAP Test, echo=FALSE, cache=TRUE, fig.width = 10, fig.fullwidth = TRUE}
+plot.qaptest(fr_ad_qap)  # plots qaptest
+message(paste("Proportion of draws which were >= observed value:", fr_ad_qap$pgreq))
+message(paste("Proportion of draws which were <= observed value:", fr_ad_qap$pleeq))
+```
+
+## Analysis
+
+**Which individual sees the two networks as the most similar? Which sees them as the least similar?**
+
+# Submitting the Lab (**5 pts**)
+
+After knitting your file to RPubs, copy the URL and paste it into the comment field of the Lab 2 Assignment on Canvas. Save this .Rmd file and submit it in the file portion of your Canvas assignment. Make sure to review your file and its formatting. **Run spell check (built into RStudio) and proofread your answers before submitting.**
